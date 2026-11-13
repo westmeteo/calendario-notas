@@ -53,12 +53,13 @@
   main{ position:relative; padding: 14px 16px 14px 76px; }
 
   /* shared 7-column layout for weekday bar + day grid */
+  .canvas{ position:relative; width:1190px; }
   .cols{
     display:grid;
-    grid-template-columns: repeat(7, minmax(150px, 1fr));
+    grid-template-columns: repeat(7, 170px);
     gap:0;
-    max-width: 1600px;
-    margin: 0 auto;
+    width:1190px;
+    margin: 0;
   }
 
   /* ---------- Weekday bar ---------- */
@@ -213,6 +214,9 @@
   .tbox.front{ background:rgba(255,255,255,.55); border:1px solid rgba(47,109,246,.5); box-shadow:0 3px 12px rgba(0,0,0,.1); }
   .tbox.back{ background:transparent; border:1px dashed transparent; }
   .tbox.selected{ outline:2px solid var(--accent); outline-offset:1px; }
+  .tbox.selected .tbox-bar{ opacity:1; pointer-events:auto; }
+  .tbox.selected .tbox-rz-ne, .tbox.selected .tbox-rz-nw, .tbox.selected .tbox-rz-se, .tbox.selected .tbox-rz-sw{ background:#2f6df6; border:1.5px solid #fff; border-radius:2px; }
+  .tbox.selected .tbox-rz-n, .tbox.selected .tbox-rz-s, .tbox.selected .tbox-rz-e, .tbox.selected .tbox-rz-w{ background:rgba(47,109,246,.2); }
   .tbox.back .tbox-body{ opacity:.3; }
   .text-layer.back.interactive .tbox:hover{ background:rgba(255,255,255,.35); border-color:rgba(47,109,246,.4); }
 
@@ -331,11 +335,6 @@
   .day-modal-close:hover{ background:#eef1f5; color:#1f2430; }
   .day-modal-text{ flex:1 1 auto; border:none; outline:none; resize:none; padding:20px 24px; font-family:inherit; line-height:1.5; }
 
-  @media (max-width: 1100px){
-    .cols{ grid-template-columns: repeat(7, minmax(108px,1fr)); }
-    .day{ min-height:130px; }
-    .weekbar div{ font-size:14px; }
-  }
   @media (max-width: 840px){
     header{ padding:8px 10px; gap:8px 10px; }
     header h1{ font-size:15px; }
@@ -343,8 +342,7 @@
     .spacer{ display:none; }
     .counter-box{ font-size:11px; padding:3px 6px; }
     .btn.small{ padding:7px 11px; }
-    main{ position:relative; padding:10px 8px 74px 8px; }
-    .weekbar{ position:static; }
+    main{ position:relative; padding:14px 8px 74px 8px; }
     .tools{ left:50%; right:auto; top:auto; bottom:10px; transform:translateX(-50%); flex-direction:row; gap:5px; padding:6px; box-shadow:0 -2px 14px rgba(0,0,0,.18); }
     .tools button{ width:42px; height:42px; font-size:18px; }
     .tool-panel{ left:50%; right:auto; top:auto; bottom:64px; transform:translateX(-50%); width:min(92vw,260px); }
@@ -367,14 +365,16 @@
   </header>
 
   <main>
-    <div class="cols weekbar">
-      <div>Lunes</div><div>Martes</div><div>Miércoles</div><div>Jueves</div>
-      <div>Viernes</div><div class="we">Sábado</div><div class="we">Domingo</div>
+    <div class="canvas">
+      <div class="cols weekbar">
+        <div>Lunes</div><div>Martes</div><div>Miércoles</div><div>Jueves</div>
+        <div>Viernes</div><div class="we">Sábado</div><div class="we">Domingo</div>
+      </div>
+      <div class="cols grid" id="grid"></div>
+      <div class="text-layer back" id="textLayerBack"></div>
+      <div class="overlay" id="overlay"><svg id="annoSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="text-layer front" id="textLayerFront"></div>
     </div>
-    <div class="cols grid" id="grid"></div>
-    <div class="text-layer back" id="textLayerBack"></div>
-    <div class="overlay" id="overlay"><svg id="annoSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
-    <div class="text-layer front" id="textLayerFront"></div>
   </main>
 
   <div class="tools" id="tools">
