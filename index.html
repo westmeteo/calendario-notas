@@ -1269,6 +1269,20 @@
   var SYNC_CFG_KEY="calendarioSync_v1";
   var deviceId=(function(){ var d=localStorage.getItem("calendarioDeviceId"); if(!d){ d="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); localStorage.setItem("calendarioDeviceId",d); } return d; })();
   var sync=(function(){ try{ return JSON.parse(localStorage.getItem(SYNC_CFG_KEY))||{}; }catch(e){ return {}; } })();
+  var DEFAULT_SYNC_URL="https://westmeteo.com/sync.php";
+  // Configuración por enlace: #k=CLAVE (y opcional #u=URL) -> auto-activa en cualquier dispositivo
+  (function(){
+    var h=location.hash||"";
+    var mk=h.match(/[#&]k=([^&]+)/), mu=h.match(/[#&]u=([^&]+)/);
+    if(mk){
+      try{ sync.key=decodeURIComponent(mk[1]); }catch(e){ sync.key=mk[1]; }
+      sync.url = mu ? decodeURIComponent(mu[1]) : (sync.url||DEFAULT_SYNC_URL);
+      sync.enabled=true;
+      try{ localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(sync)); }catch(e){}
+      try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){}
+    }
+    if(!sync.url) sync.url=DEFAULT_SYNC_URL;
+  })();
   var pushTimer=null, pollTimer=null;
   function syncUrlFor(){ if(!sync.url||!sync.key) return null; var b=sync.url.replace(/\?.*$/,""); return b+"?key="+encodeURIComponent(sync.key); }
   function hhmm(){ var d=new Date(); return (""+d.getHours()).padStart(2,"0")+":"+(""+d.getMinutes()).padStart(2,"0"); }
@@ -1313,7 +1327,7 @@
 
   var syncPop=document.createElement("div"); syncPop.className="sync-pop";
   var sTitle=document.createElement("div"); sTitle.className="sync-title"; sTitle.textContent="Sincronización en la nube"; syncPop.appendChild(sTitle);
-  var sU=document.createElement("input"); sU.type="text"; sU.className="sync-in"; sU.placeholder="URL de sync.php (https://…/sync.php)"; sU.value=sync.url||""; syncPop.appendChild(sU);
+  var sU=document.createElement("input"); sU.type="text"; sU.className="sync-in"; sU.placeholder="URL de sync.php (https://…/sync.php)"; sU.value=sync.url||DEFAULT_SYNC_URL; syncPop.appendChild(sU);
   var sK=document.createElement("input"); sK.type="text"; sK.className="sync-in"; sK.placeholder="Clave de espacio (igual en PC y móvil)"; sK.value=sync.key||""; syncPop.appendChild(sK);
   var sToggle=document.createElement("button"); sToggle.className="btn small"; syncPop.appendChild(sToggle);
   var sStat=document.createElement("div"); sStat.id="syncStatus"; sStat.className="sync-status"; syncPop.appendChild(sStat);
@@ -1328,7 +1342,7 @@
   document.getElementById("btnSync").addEventListener("click", function(e){
     e.stopPropagation();
     if(syncPop.classList.contains("open")){ syncPop.classList.remove("open"); return; }
-    sU.value=sync.url||""; sK.value=sync.key||""; refreshSyncUI();
+    sU.value=sync.url||DEFAULT_SYNC_URL; sK.value=sync.key||""; refreshSyncUI();
     syncStatus(sync.enabled?("activado"):(""), sync.enabled?"ok":"");
     syncPop.classList.add("open");
     var r=document.getElementById("btnSync").getBoundingClientRect(), w=syncPop.offsetWidth;
