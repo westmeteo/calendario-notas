@@ -336,6 +336,19 @@
     .day{ min-height:130px; }
     .weekbar div{ font-size:14px; }
   }
+  @media (max-width: 840px){
+    header{ padding:8px 10px; gap:8px 10px; }
+    header h1{ font-size:15px; }
+    .range{ display:none; }
+    .spacer{ display:none; }
+    .counter-box{ font-size:11px; padding:3px 6px; }
+    .btn.small{ padding:7px 11px; }
+    main{ position:relative; padding:10px 8px 74px 8px; }
+    .weekbar{ position:static; }
+    .tools{ left:50%; right:auto; top:auto; bottom:10px; transform:translateX(-50%); flex-direction:row; gap:5px; padding:6px; box-shadow:0 -2px 14px rgba(0,0,0,.18); }
+    .tools button{ width:42px; height:42px; font-size:18px; }
+    .tool-panel{ left:50%; right:auto; top:auto; bottom:64px; transform:translateX(-50%); width:min(92vw,260px); }
+  }
 </style>
 </head>
 <body>
