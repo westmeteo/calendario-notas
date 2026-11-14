@@ -254,11 +254,14 @@
   .overlay{ position:absolute; inset:0; z-index:10; pointer-events:none; }
   .overlay.active{ pointer-events:auto; touch-action:none; overscroll-behavior:none; }
   .overlay.active svg{ touch-action:none; }
+  .overlay.dragging{ touch-action:none; overscroll-behavior:none; }
+  .overlay.dragging svg{ touch-action:none; }
   .overlay svg{ width:100%; height:100%; display:block; }
   .overlay svg .anno{ pointer-events:none; }
-  .overlay.write svg .anno{ pointer-events:auto; cursor:pointer; }
+  .overlay.write svg .anno{ pointer-events:auto; cursor:pointer; touch-action:none; }
   .overlay.erase svg .anno{ pointer-events:auto; cursor:pointer; }
-  .overlay.pickstick svg .anno-sticker{ pointer-events:auto; cursor:nwse-resize; }
+  .overlay.pickstick svg .anno-sticker{ pointer-events:auto; cursor:nwse-resize; touch-action:none; }
+  .overlay svg #selUI *{ touch-action:none; }
 
   /* left tools palette */
   .tools{
@@ -930,7 +933,7 @@
         var hs=11, hx=h[1], hy=h[2];
         var hd=elNS("rect",{x:hx-hs/2,y:hy-hs/2,width:hs,height:hs,rx:2,fill:"#2f6df6",stroke:"#fff","stroke-width":1.5});
         hd.setAttribute("pointer-events","auto"); hd.setAttribute("style","cursor:"+h[5]);
-        hd.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); ev.preventDefault(); resizeSticker={el:t, a:a, sx:ev.clientX, sy:ev.clientY, start:a.size||32, ox:a.x, oy:a.y, mv:false, pushed:false, sgx:h[3], sgy:h[4]}; svg.setPointerCapture(ev.pointerId); });
+        hd.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); ev.preventDefault(); resizeSticker={el:t, a:a, sx:ev.clientX, sy:ev.clientY, start:a.size||32, ox:a.x, oy:a.y, mv:false, pushed:false, sgx:h[3], sgy:h[4]}; if(overlay) overlay.classList.add("dragging"); svg.setPointerCapture(ev.pointerId); });
         g.appendChild(hd);
       });
     }
@@ -1019,6 +1022,7 @@
   var drawing=false, startPt=null, tempEl=null, points=null, resizeSticker=null;
   function startStickerGesture(e, groupEl, an){
     resizeSticker={el:groupEl, a:an, sx:e.clientX, sy:e.clientY, start:an.size||32, ox:an.x, oy:an.y, mv:true, pushed:false};
+    if(overlay) overlay.classList.add("dragging");
     svg.setPointerCapture(e.pointerId);
   }
   svg.addEventListener("pointerdown", function(e){
@@ -1091,6 +1095,7 @@
     }
   });
   function endPointer(e){
+    if(overlay) overlay.classList.remove("dragging");
     if(resizeSticker){ resizeSticker=null; save(); renderSelection(); return; }
     if(!drawing) return; drawing=false;
     var committed=false;
@@ -1420,6 +1425,11 @@
   function loadOutlookCache(){ try{ var d=JSON.parse(localStorage.getItem("calOutlookData")); if(Array.isArray(d)) setOutlookEvents(d); }catch(e){} }
   function cacheOutlook(arr){ try{ localStorage.setItem("calOutlookData", JSON.stringify(arr)); }catch(e){} }
 
+  // Puente opcional vía Hostinger: el PC (con archivo vinculado) sube el feed; el móvil lo lee.
+  function outlookFeedUrl(){ if(!sync.url||!sync.key) return null; return sync.url.replace(/\?.*$/,"")+"?key="+encodeURIComponent(sync.key+"-ol"); }
+  function pushOutlookRemote(arr){ var u=outlookFeedUrl(); if(!u||!Array.isArray(arr)) return; fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(arr)}).then(function(){ logAction("outlook subido a nube "+arr.length+" ev"); }).catch(function(){}); }
+  function fetchOutlookRemote(){ var u=outlookFeedUrl(); if(!u) return; fetch(u).then(function(r){ return r.ok?r.json():null; }).then(function(data){ if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); if(outlookOn) render(); refreshOutlookUI(); logAction("outlook nube "+data.length+" ev"); } }).catch(function(){}); }
+
   function olEnsurePerm(handle, interactive){
     if(!handle.queryPermission) return Promise.resolve(true);
     return handle.queryPermission({mode:"read"}).then(function(p){
@@ -1434,14 +1444,14 @@
       if(!ok) return false;
       return olHandle.getFile().then(function(f){ return f.text(); }).then(function(txt){
         var data=JSON.parse(txt);
-        if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=olHandle.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); logAction("outlook archivo "+data.length+" ev"); return true; }
+        if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=olHandle.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); pushOutlookRemote(data); logAction("outlook archivo "+data.length+" ev"); return true; }
         return false;
       });
     }).catch(function(){ return false; });
   }
   function fallbackPick(){
     var inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
-    inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ try{ var data=JSON.parse(rd.result); if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=f.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); toast("Outlook importado 📅"); } else { toast("Archivo no válido"); } }catch(e){ toast("Archivo no válido"); } }; rd.readAsText(f); };
+    inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ try{ var data=JSON.parse(rd.result); if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=f.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); pushOutlookRemote(data); toast("Outlook importado 📅"); } else { toast("Archivo no válido"); } }catch(e){ toast("Archivo no válido"); } }; rd.readAsText(f); };
     inp.click();
   }
   function pickOutlookFile(){
@@ -1455,10 +1465,15 @@
   function refreshOutlook(interactive){
     if(olHandle){ readOutlookHandle(interactive); return; }
     olIdbGet("olfile").then(function(h){
-      if(h){ olHandle=h; readOutlookHandle(interactive); }
-      else if(interactive && window.showOpenFilePicker){ pickOutlookFile(); }
-      else if(interactive){ toast("El calendario de Outlook solo está disponible en el PC"); }
-    }).catch(function(){ if(interactive && window.showOpenFilePicker) pickOutlookFile(); });
+      if(h){ olHandle=h; olFileName=h.name||olFileName; readOutlookHandle(interactive); return; }
+      if(window.showOpenFilePicker){
+        if(interactive){ pickOutlookFile(); }
+        else if(outlookFeedUrl()){ fetchOutlookRemote(); }
+      } else {
+        if(outlookFeedUrl()){ fetchOutlookRemote(); }
+        else if(interactive){ toast("Activa la nube ☁ para ver Outlook en este dispositivo"); }
+      }
+    }).catch(function(){ if(interactive && window.showOpenFilePicker) pickOutlookFile(); else if(outlookFeedUrl()) fetchOutlookRemote(); });
   }
   function setOutlook(on, interactive){
     outlookOn=on; try{ localStorage.setItem("calOutlookOn", on?"1":"0"); }catch(e){}
@@ -1472,7 +1487,7 @@
   var oToggle=document.createElement("button"); oToggle.className="btn small"; olPop.appendChild(oToggle);
   var oPick=document.createElement("button"); oPick.className="btn small"; oPick.textContent="Elegir / cambiar archivo…"; oPick.style.marginLeft="6px"; olPop.appendChild(oPick);
   var oStat=document.createElement("div"); oStat.className="sync-status"; olPop.appendChild(oStat);
-  var oHint=document.createElement("div"); oHint.className="sync-hint"; oHint.textContent="Lee el archivo calendar_outlook.json de tu OneDrive (lo genera Power Automate). Los eventos solo se ven en este equipo; no se envían a ningún sitio."; olPop.appendChild(oHint);
+  var oHint=document.createElement("div"); oHint.className="sync-hint"; oHint.textContent="En el PC lee el archivo calendar_outlook.json de tu OneDrive (lo genera Power Automate) y lo publica en tu nube; el móvil lo lee de ahí. Necesita la nube ☁ activada con la misma clave."; olPop.appendChild(oHint);
   document.body.appendChild(olPop);
   function olEventCount(){ var n=0; for(var k in outlookEvents){ if(outlookEvents.hasOwnProperty(k)) n+=outlookEvents[k].length; } return n; }
   function refreshOutlookUI(){
