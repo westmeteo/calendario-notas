@@ -143,6 +143,9 @@
   .sync-status.err{ color:#e03131; }
   .sync-hint{ font-size:10.5px; color:var(--muted); margin-top:8px; line-height:1.35; }
   #btnSync.on{ color:#2f9e44; }
+  #btnOutlook.on{ color:#1971c2; }
+  .ol-events{ display:flex; flex-direction:column; gap:1px; padding:0 6px 2px; }
+  .ol-chip{ font-size:10px; line-height:1.3; color:#10395e; background:#e7f0ff; border-left:3px solid #1971c2; border-radius:3px; padding:1px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
   .today-tag{
     margin-left:4px; font-size:10px; font-weight:800; letter-spacing:.5px;
     background:var(--today); color:#fff; padding:2px 6px; border-radius:20px;
@@ -361,6 +364,7 @@
     <button class="btn ghost small" id="btnImport">Importar</button>
     <button class="btn ghost small" id="btnLog" title="Descargar log de depuración">Log</button>
     <button class="btn ghost small" id="btnSync" title="Sincronización en la nube">☁</button>
+    <button class="btn ghost small" id="btnOutlook" title="Mostrar/ocultar eventos de Outlook">📅</button>
     <input type="file" id="fileImport" accept="application/json" hidden>
   </header>
 
@@ -662,6 +666,13 @@
     }
     if(key===todayKey){ var tag=document.createElement("span"); tag.className="today-tag"; tag.textContent="HOY"; head.appendChild(tag); }
     cell.appendChild(head);
+    if(outlookOn && outlookEvents[key] && outlookEvents[key].length){
+      var ole=document.createElement("div"); ole.className="ol-events";
+      outlookEvents[key].slice().sort(function(a,b){ return (a.t||"").localeCompare(b.t||""); }).forEach(function(ev){
+        var c=document.createElement("div"); c.className="ol-chip"; c.textContent=(ev.t?ev.t+" ":"")+(ev.s||""); c.title=c.textContent; ole.appendChild(c);
+      });
+      cell.appendChild(ole);
+    }
 
     var ta = document.createElement("textarea");
     ta.value = data.text || "";
@@ -1381,6 +1392,30 @@
   });
   document.addEventListener("pointerdown", function(e){ if(syncPop.classList.contains("open") && !syncPop.contains(e.target) && e.target.id!=="btnSync") syncPop.classList.remove("open"); }, true);
 
+  // ---------- Outlook overlay (feed vía sync.php con clave "-ol") ----------
+  var outlookEvents={}, outlookOn=false, outlookTimer=null;
+  try{ outlookOn = localStorage.getItem("calOutlookOn")==="1"; }catch(e){}
+  function outlookFeedUrl(){ if(!sync.url||!sync.key) return null; return sync.url.replace(/\?.*$/,"")+"?key="+encodeURIComponent(sync.key+"-ol"); }
+  function setOutlookEvents(arr){ outlookEvents={}; if(Array.isArray(arr)){ arr.forEach(function(ev){ if(ev&&ev.d){ (outlookEvents[ev.d]=outlookEvents[ev.d]||[]).push(ev); } }); } }
+  function loadOutlookCache(){ try{ var d=JSON.parse(localStorage.getItem("calOutlookData")); if(Array.isArray(d)) setOutlookEvents(d); }catch(e){} }
+  function fetchOutlook(){
+    var u=outlookFeedUrl(); if(!u) return;
+    fetch(u).then(function(r){ return r.ok?r.json():null; }).then(function(data){
+      if(Array.isArray(data)){ try{ localStorage.setItem("calOutlookData", JSON.stringify(data)); }catch(e){} setOutlookEvents(data); if(outlookOn) render(); logAction("outlook feed "+data.length+" ev"); }
+    }).catch(function(){ /* sin red: se mantiene la última foto */ });
+  }
+  function setOutlook(on){
+    outlookOn=on; try{ localStorage.setItem("calOutlookOn", on?"1":"0"); }catch(e){}
+    var b=document.getElementById("btnOutlook"); if(b) b.classList.toggle("on", on);
+    if(on){ loadOutlookCache(); render(); fetchOutlook(); if(!outlookTimer) outlookTimer=setInterval(fetchOutlook, 600000); }
+    else { if(outlookTimer){ clearInterval(outlookTimer); outlookTimer=null; } render(); }
+    logAction("outlook "+(on?"on":"off"));
+  }
+  document.getElementById("btnOutlook").addEventListener("click", function(){
+    if(!sync.key){ toast("Primero activa la nube ☁"); return; }
+    setOutlook(!outlookOn);
+  });
+
   window.addEventListener("beforeunload", function(){ save(true); });
   // ---------- Go ----------
   logAction("app iniciada");
@@ -1389,6 +1424,7 @@
   renderTextBoxes();
   setMode("write");
   if(sync.enabled) enableSync();
+  if(outlookOn) setOutlook(true);
 })();
 </script>
 </body>
