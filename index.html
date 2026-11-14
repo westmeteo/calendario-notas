@@ -1444,14 +1444,14 @@
       if(!ok) return false;
       return olHandle.getFile().then(function(f){ return f.text(); }).then(function(txt){
         var data=JSON.parse(txt);
-        if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=olHandle.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); pushOutlookRemote(data); logAction("outlook archivo "+data.length+" ev"); return true; }
+        if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=olHandle.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); logAction("outlook archivo "+data.length+" ev"); return true; }
         return false;
       });
     }).catch(function(){ return false; });
   }
   function fallbackPick(){
     var inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
-    inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ try{ var data=JSON.parse(rd.result); if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=f.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); pushOutlookRemote(data); toast("Outlook importado 📅"); } else { toast("Archivo no válido"); } }catch(e){ toast("Archivo no válido"); } }; rd.readAsText(f); };
+    inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ try{ var data=JSON.parse(rd.result); if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=f.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); toast("Outlook importado 📅"); } else { toast("Archivo no válido"); } }catch(e){ toast("Archivo no válido"); } }; rd.readAsText(f); };
     inp.click();
   }
   function pickOutlookFile(){
