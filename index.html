@@ -1456,8 +1456,9 @@
     if(olHandle){ readOutlookHandle(interactive); return; }
     olIdbGet("olfile").then(function(h){
       if(h){ olHandle=h; readOutlookHandle(interactive); }
-      else if(interactive){ pickOutlookFile(); }
-    }).catch(function(){ if(interactive) pickOutlookFile(); });
+      else if(interactive && window.showOpenFilePicker){ pickOutlookFile(); }
+      else if(interactive){ toast("El calendario de Outlook solo está disponible en el PC"); }
+    }).catch(function(){ if(interactive && window.showOpenFilePicker) pickOutlookFile(); });
   }
   function setOutlook(on, interactive){
     outlookOn=on; try{ localStorage.setItem("calOutlookOn", on?"1":"0"); }catch(e){}
