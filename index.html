@@ -224,7 +224,7 @@
     position:absolute; top:0; left:0; right:0; z-index:2;
     display:flex; align-items:center; gap:4px; padding:3px 4px;
     background:rgba(255,255,255,.9); border-bottom:1px solid rgba(0,0,0,.08);
-    border-radius:8px 8px 0 0; cursor:move;
+    border-radius:8px 8px 0 0; cursor:move; touch-action:none;
     opacity:0; pointer-events:none; transition:opacity .12s;
   }
   .tbox:hover .tbox-bar, .tbox:focus-within .tbox-bar{ opacity:1; pointer-events:auto; }
@@ -235,7 +235,7 @@
   .tbox-del{ margin-left:auto; color:#b42318; font-size:14px; padding:0 7px; }
   .tbox-color{ width:22px; height:20px; border:1px solid var(--border); border-radius:4px; padding:0; cursor:pointer; background:none; }
   .tbox-body{ flex:1 1 auto; padding:6px 8px; outline:none; overflow:auto; white-space:pre-wrap; word-break:break-word; line-height:1.3; }
-  .tbox-rz{ position:absolute; z-index:3; }
+  .tbox-rz{ position:absolute; z-index:3; touch-action:none; }
   .tbox-rz-n{ top:0; left:12px; right:12px; height:8px; cursor:ns-resize; }
   .tbox-rz-s{ bottom:0; left:12px; right:12px; height:8px; cursor:ns-resize; }
   .tbox-rz-e{ right:0; top:12px; bottom:12px; width:8px; cursor:ew-resize; }
@@ -249,7 +249,7 @@
 
   /* ---------- Annotation overlay ---------- */
   .overlay{ position:absolute; inset:0; z-index:10; pointer-events:none; }
-  .overlay.active{ pointer-events:auto; }
+  .overlay.active{ pointer-events:auto; touch-action:none; overscroll-behavior:none; }
   .overlay.active svg{ touch-action:none; }
   .overlay svg{ width:100%; height:100%; display:block; }
   .overlay svg .anno{ pointer-events:none; }
@@ -1016,6 +1016,7 @@
       if(hit){ e.stopPropagation(); var wid=hit.getAttribute("data-id"); selectAnno(wid); var wan=findAnno(wid); if(wan && wan.type==="sticker"){ startStickerGesture(e, hit, wan); } }
       return;
     }
+    if(e.cancelable) e.preventDefault();
     if(mode==="draw"){
       drawing=true; var p=svgXY(e); points=[[p.x,p.y]];
       var dw=highlighter?Math.max(penWidth*3,14):penWidth, dop=highlighter?0.35:1;
@@ -1048,6 +1049,7 @@
     }
   });
   svg.addEventListener("pointermove", function(e){
+    if((drawing||resizeSticker) && e.cancelable) e.preventDefault();
     if(resizeSticker){
       if(!resizeSticker.pushed){ pushHistory(); resizeSticker.pushed=true; }
       var g=resizeSticker.el, t=g.querySelector("text"), rc=g.querySelector("rect");
