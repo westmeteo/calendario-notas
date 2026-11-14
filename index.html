@@ -1392,29 +1392,109 @@
   });
   document.addEventListener("pointerdown", function(e){ if(syncPop.classList.contains("open") && !syncPop.contains(e.target) && e.target.id!=="btnSync") syncPop.classList.remove("open"); }, true);
 
-  // ---------- Outlook overlay (feed vía sync.php con clave "-ol") ----------
-  var outlookEvents={}, outlookOn=false, outlookTimer=null;
+  // ---------- Outlook overlay (archivo local de OneDrive; solo en el PC, sin salida externa) ----------
+  var outlookEvents={}, outlookOn=false, outlookTimer=null, olHandle=null, olFileName="";
   try{ outlookOn = localStorage.getItem("calOutlookOn")==="1"; }catch(e){}
-  function outlookFeedUrl(){ if(!sync.url||!sync.key) return null; return sync.url.replace(/\?.*$/,"")+"?key="+encodeURIComponent(sync.key+"-ol"); }
-  function setOutlookEvents(arr){ outlookEvents={}; if(Array.isArray(arr)){ arr.forEach(function(ev){ if(ev&&ev.d){ (outlookEvents[ev.d]=outlookEvents[ev.d]||[]).push(ev); } }); } }
-  function loadOutlookCache(){ try{ var d=JSON.parse(localStorage.getItem("calOutlookData")); if(Array.isArray(d)) setOutlookEvents(d); }catch(e){} }
-  function fetchOutlook(){
-    var u=outlookFeedUrl(); if(!u) return;
-    fetch(u).then(function(r){ return r.ok?r.json():null; }).then(function(data){
-      if(Array.isArray(data)){ try{ localStorage.setItem("calOutlookData", JSON.stringify(data)); }catch(e){} setOutlookEvents(data); if(outlookOn) render(); logAction("outlook feed "+data.length+" ev"); }
-    }).catch(function(){ /* sin red: se mantiene la última foto */ });
+  try{ olFileName = localStorage.getItem("calOutlookName")||""; }catch(e){}
+
+  function olOpenDB(){ return new Promise(function(res,rej){ var r=indexedDB.open("calOutlookFS",1); r.onupgradeneeded=function(){ r.result.createObjectStore("h"); }; r.onsuccess=function(){res(r.result);}; r.onerror=function(){rej(r.error);}; }); }
+  function olIdbSet(k,v){ return olOpenDB().then(function(db){ return new Promise(function(res,rej){ var tx=db.transaction("h","readwrite"); tx.objectStore("h").put(v,k); tx.oncomplete=function(){res();}; tx.onerror=function(){rej(tx.error);}; }); }); }
+  function olIdbGet(k){ return olOpenDB().then(function(db){ return new Promise(function(res,rej){ var tx=db.transaction("h","readonly"); var q=tx.objectStore("h").get(k); q.onsuccess=function(){res(q.result);}; q.onerror=function(){rej(q.error);}; }); }); }
+
+  function normEv(ev){
+    if(!ev||typeof ev!=="object") return null;
+    var d = ev.d || ev.date || "";
+    if(!d && ev.start && (""+ev.start).indexOf("T")>=0){ d=(""+ev.start).slice(0,10); }
+    if(!d) return null;
+    var t = ev.t;
+    if(t==null){
+      if(ev.start && (""+ev.start).indexOf("T")>=0){ t=(""+ev.start).slice(11,16); } else { t=""; }
+    }
+    var s = ev.s || ev.title || ev.subject || "";
+    return { d:d, t:t, s:s };
   }
-  function setOutlook(on){
+  function setOutlookEvents(arr){
+    outlookEvents={};
+    if(Array.isArray(arr)){ arr.forEach(function(raw){ var ev=normEv(raw); if(ev){ (outlookEvents[ev.d]=outlookEvents[ev.d]||[]).push(ev); } }); }
+  }
+  function loadOutlookCache(){ try{ var d=JSON.parse(localStorage.getItem("calOutlookData")); if(Array.isArray(d)) setOutlookEvents(d); }catch(e){} }
+  function cacheOutlook(arr){ try{ localStorage.setItem("calOutlookData", JSON.stringify(arr)); }catch(e){} }
+
+  function olEnsurePerm(handle, interactive){
+    if(!handle.queryPermission) return Promise.resolve(true);
+    return handle.queryPermission({mode:"read"}).then(function(p){
+      if(p==="granted") return true;
+      if(interactive && handle.requestPermission) return handle.requestPermission({mode:"read"}).then(function(p2){ return p2==="granted"; });
+      return false;
+    });
+  }
+  function readOutlookHandle(interactive){
+    if(!olHandle) return Promise.resolve(false);
+    return olEnsurePerm(olHandle, interactive).then(function(ok){
+      if(!ok) return false;
+      return olHandle.getFile().then(function(f){ return f.text(); }).then(function(txt){
+        var data=JSON.parse(txt);
+        if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=olHandle.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); logAction("outlook archivo "+data.length+" ev"); return true; }
+        return false;
+      });
+    }).catch(function(){ return false; });
+  }
+  function fallbackPick(){
+    var inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
+    inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ try{ var data=JSON.parse(rd.result); if(Array.isArray(data)){ cacheOutlook(data); setOutlookEvents(data); olFileName=f.name||olFileName; try{localStorage.setItem("calOutlookName",olFileName);}catch(e){} if(outlookOn) render(); refreshOutlookUI(); toast("Outlook importado 📅"); } else { toast("Archivo no válido"); } }catch(e){ toast("Archivo no válido"); } }; rd.readAsText(f); };
+    inp.click();
+  }
+  function pickOutlookFile(){
+    if(!window.showOpenFilePicker){ fallbackPick(); return; }
+    window.showOpenFilePicker({ types:[{description:"JSON",accept:{"application/json":[".json"]}}], multiple:false })
+      .then(function(hs){ olHandle=hs[0]; return olIdbSet("olfile", olHandle); })
+      .then(function(){ return readOutlookHandle(true); })
+      .then(function(ok){ if(ok) toast("Outlook vinculado 📅"); })
+      .catch(function(){ /* cancelado por el usuario */ });
+  }
+  function refreshOutlook(interactive){
+    if(olHandle){ readOutlookHandle(interactive); return; }
+    olIdbGet("olfile").then(function(h){
+      if(h){ olHandle=h; readOutlookHandle(interactive); }
+      else if(interactive){ pickOutlookFile(); }
+    }).catch(function(){ if(interactive) pickOutlookFile(); });
+  }
+  function setOutlook(on, interactive){
     outlookOn=on; try{ localStorage.setItem("calOutlookOn", on?"1":"0"); }catch(e){}
     var b=document.getElementById("btnOutlook"); if(b) b.classList.toggle("on", on);
-    if(on){ loadOutlookCache(); render(); fetchOutlook(); if(!outlookTimer) outlookTimer=setInterval(fetchOutlook, 600000); }
+    if(on){ loadOutlookCache(); render(); refreshOutlook(interactive); if(!outlookTimer) outlookTimer=setInterval(function(){ refreshOutlook(false); }, 300000); }
     else { if(outlookTimer){ clearInterval(outlookTimer); outlookTimer=null; } render(); }
     logAction("outlook "+(on?"on":"off"));
   }
-  document.getElementById("btnOutlook").addEventListener("click", function(){
-    if(!sync.key){ toast("Primero activa la nube ☁"); return; }
-    setOutlook(!outlookOn);
+  var olPop=document.createElement("div"); olPop.className="sync-pop";
+  var oTitle=document.createElement("div"); oTitle.className="sync-title"; oTitle.textContent="Calendario de Outlook"; olPop.appendChild(oTitle);
+  var oToggle=document.createElement("button"); oToggle.className="btn small"; olPop.appendChild(oToggle);
+  var oPick=document.createElement("button"); oPick.className="btn small"; oPick.textContent="Elegir / cambiar archivo…"; oPick.style.marginLeft="6px"; olPop.appendChild(oPick);
+  var oStat=document.createElement("div"); oStat.className="sync-status"; olPop.appendChild(oStat);
+  var oHint=document.createElement("div"); oHint.className="sync-hint"; oHint.textContent="Lee el archivo calendar_outlook.json de tu OneDrive (lo genera Power Automate). Los eventos solo se ven en este equipo; no se envían a ningún sitio."; olPop.appendChild(oHint);
+  document.body.appendChild(olPop);
+  function olEventCount(){ var n=0; for(var k in outlookEvents){ if(outlookEvents.hasOwnProperty(k)) n+=outlookEvents[k].length; } return n; }
+  function refreshOutlookUI(){
+    if(!oStat) return;
+    oToggle.textContent = outlookOn ? "Desactivar" : "Activar";
+    var parts=[ outlookOn?"activado":"desactivado" ];
+    parts.push(olFileName ? ("archivo: "+olFileName) : "sin archivo vinculado");
+    parts.push(olEventCount()+" eventos");
+    oStat.textContent = parts.join(" · ");
+    oStat.className = "sync-status" + (outlookOn?" ok":"");
+  }
+  oToggle.addEventListener("click", function(){ setOutlook(!outlookOn, true); refreshOutlookUI(); });
+  oPick.addEventListener("click", function(){ pickOutlookFile(); });
+  document.getElementById("btnOutlook").addEventListener("click", function(e){
+    e.stopPropagation();
+    if(olPop.classList.contains("open")){ olPop.classList.remove("open"); return; }
+    refreshOutlookUI();
+    olPop.classList.add("open");
+    var r=document.getElementById("btnOutlook").getBoundingClientRect(), w=olPop.offsetWidth;
+    var left=r.right-w; if(left<8) left=8; olPop.style.left=left+"px"; olPop.style.top=(r.bottom+6)+"px";
   });
+  document.addEventListener("pointerdown", function(e){ if(olPop.classList.contains("open") && !olPop.contains(e.target) && e.target.id!=="btnOutlook") olPop.classList.remove("open"); }, true);
+  olIdbGet("olfile").then(function(h){ if(h){ olHandle=h; olFileName=h.name||olFileName; refreshOutlookUI(); } }).catch(function(){});
 
   window.addEventListener("beforeunload", function(){ save(true); });
   // ---------- Go ----------
