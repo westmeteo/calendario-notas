@@ -1124,7 +1124,21 @@
     if(m==="write"){ toolPanel.classList.remove("open"); toolPanel.innerHTML=""; }
     else { buildPanel(m); toolPanel.classList.toggle("open", toolPanel.children.length>0); }
   }
-  toolBtns.forEach(function(b){ b.addEventListener("click", function(){ setMode(mode===b.dataset.mode ? "write" : b.dataset.mode); }); });
+  toolBtns.forEach(function(b){ b.addEventListener("click", function(){
+    var m=b.dataset.mode;
+    if(m==="write"){ setMode("write"); return; }
+    if(mode!==m){ setMode(m); return; }                                   // cambiar a esta herramienta (abre panel)
+    if(toolPanel.classList.contains("open")){ setMode("write"); }          // ya activa y panel abierto -> apagar
+    else { buildPanel(m); toolPanel.classList.toggle("open", toolPanel.children.length>0); }  // ya activa y panel oculto -> reabrir
+  }); });
+  // En móvil: al tocar fuera del panel de opciones (y fuera de la barra), se oculta (la herramienta sigue activa)
+  document.addEventListener("pointerdown", function(e){
+    if(window.innerWidth>840) return;
+    if(!toolPanel.classList.contains("open")) return;
+    if(toolPanel.contains(e.target)) return;
+    if(e.target.closest && e.target.closest("#tools")) return;
+    toolPanel.classList.remove("open");
+  }, true);
 
   // tool tooltips: appear only after hovering a button for 1s
   var TOOL_TIPS = {
